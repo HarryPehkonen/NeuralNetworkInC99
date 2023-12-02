@@ -6,13 +6,40 @@
 
 time_t seed = (time_t)0;
 
+// activation functions
 nn_value_t
-sigmoid(nn_value_t x) {
-	return 1.0 / (1.0 + exp(-x));
+act_sigmoid(nn_value_t x) {
+	return (nn_value_t) (1.0 / (1.0 + exp(-x)));
 }
 
+nn_value_t
+act_tanh(nn_value_t x) {
+    return tanh(x);
+}
+
+nn_value_t
+act_relu(nn_value_t x) {
+    return (x > 0) ? x : 0;
+}
+
+nn_value_t
+act_leaky_relu(nn_value_t x) {
+    return (x > 0) ? x : 0.01 * x;
+}
+
+// TODO:  Softmax?
+
+// must be in same order as activation_t enums
+activation_function_t activations[] = {
+	act_sigmoid,
+	act_tanh,
+	act_relu,
+	act_leaky_relu
+};
+
+// neuron
 neuron_t *
-neuron_make(unsigned int n_weights) {
+neuron_make(unsigned int n_weights, activation_t activation) {
 	neuron_t *neuron = (neuron_t *)malloc(sizeof(neuron));
 	if (neuron != NULL) {
 		neuron->weights = (nn_value_t *)malloc(n_weights * sizeof(nn_value_t));
@@ -20,6 +47,8 @@ neuron_make(unsigned int n_weights) {
 	if ((neuron == NULL) || (neuron->weights == NULL)) {
 		exit(1);
 	}
+
+	neuron->activation_idx = activation;
 
 	// start with a seed, but only the first time
 	if (seed == 0) {
@@ -48,17 +77,18 @@ neuron_free(neuron_t *neuron) {
 }
 
 nn_value_t
-neuron_calculate_output(neuron_t *neuron, nn_value_t *inputs, int n) {
+neuron_calculate_output(neuron_t *neuron, nn_value_t *inputs, int inputs_len) {
 	nn_value_t sum = neuron->bias;
-	for (int i = 0; i < n; i++) {
+	for (int i = 0; i < inputs_len; i++) {
 		sum += inputs[i] * neuron->weights[i];
 	}
-	return sigmoid(sum);
+	return activations[neuron->activation_idx](sum);
 }
 
 // not multithreaded
 char * serialized_neuron = NULL;
 size_t serialized_neuron_len = 128;
+
 char *
 neuron_serialize(neuron_t *neuron) {
 
@@ -134,7 +164,7 @@ neuron_deserialize(char *txt) {
 	read += chars_read;
 
 	// make a new neuron, and start adding values
-	neuron_t *neuron = neuron_make(n_weights);
+	neuron_t *neuron = neuron_make(n_weights, SIGMOID);
 
 	// read and populate weights
 	for (int i = 0; i < n_weights; ++i) {

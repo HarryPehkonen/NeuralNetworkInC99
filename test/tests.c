@@ -12,7 +12,7 @@
 static int test_neuron_initialization(void) {
 	unsigned int n_weights = 5;
 	int result = 0;
-	neuron_t *neuron = neuron_make(n_weights);
+	neuron_t *neuron = neuron_make(n_weights, SIGMOID);
 	if (neuron == NULL) {
 		result |= 1;
 	}
@@ -27,7 +27,7 @@ static int test_neuron_initialization(void) {
 static int test_neuron_serialize(void) {
 	int result = 0;
 	unsigned int n_weights = 4;
-	neuron_t *neuron = neuron_make(n_weights);
+	neuron_t *neuron = neuron_make(n_weights, SIGMOID);
 	char *serialized = neuron_serialize(neuron);
 	neuron_t *deserialized_neuron = neuron_deserialize(serialized);
 
@@ -42,12 +42,12 @@ static int test_neuron_serialize(void) {
 
 	// make sure weights are the same
 	for (int i = 0; i < deserialized_neuron->n_weights; ++i) {
-		if (abs(neuron->weights[i] - deserialized_neuron->weights[i]) > NN_EPSILON) {
+		if (fabs(neuron->weights[i] - deserialized_neuron->weights[i]) > NN_EPSILON) {
 			result |= 2;
 		}
 	}
 
-	if (abs(deserialized_neuron->bias - neuron->bias) > NN_EPSILON) {
+	if (fabs(deserialized_neuron->bias - neuron->bias) > NN_EPSILON) {
 		result |= 4;
 	}
 
@@ -56,9 +56,38 @@ static int test_neuron_serialize(void) {
 	return result;
 }
 
+static int test_neuron_output(void) {
+	int result = 0;
+	unsigned int n_weights = 4;
+	nn_value_t input1[4] = {0.5, 0.5, 0.5, 0.5};
+	neuron_t *neuron = neuron_make(n_weights, SIGMOID);
+	
+	// set all weights to 1
+	for (int i = 0; i < n_weights; ++i) {
+		neuron->weights[i] = 1;
+	}
+	neuron->bias = 0;
+
+	nn_value_t output = neuron_calculate_output(neuron, &input1[0], 1);
+	// printf("%1.15lf\n", output);
+	if (fabs(output - 0.622459331201855) > NN_EPSILON) {
+		result |= 1;
+	}
+
+	nn_value_t input2[4] = {-0.5, -0.5, -0.5, -0.5};
+	output = neuron_calculate_output(neuron, &input2[0], 1);
+	// printf("%1.15lf\n", output);
+	if (fabs(output - 0.377540668798145) > NN_EPSILON) {
+		result |= 2;
+	}
+
+	return result;
+}
+
 static test_t tests[] = {
 	{"Neuron Initialization Test", test_neuron_initialization},
 	{"Neuron Serialization Test", test_neuron_serialize},
+	{"Neuron Calculation Test", test_neuron_output},
 };
 
 void
