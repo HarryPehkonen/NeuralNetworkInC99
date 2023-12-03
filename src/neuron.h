@@ -27,7 +27,7 @@ typedef nn_value_t (*activation_function_t)(nn_value_t);
 neuron_t *neuron_make(unsigned int n_weights, activation_t);
 neuron_t *neuron_free(neuron_t *);
 nn_value_t sigmoid(nn_value_t);
-nn_value_t neuron_calculate_output(neuron_t *, nn_value_t *, int);
+nn_value_t neuron_run(neuron_t *, nn_value_t *inputs[], int inputs_len);
 char *neuron_serialize(neuron_t *);
 neuron_t *neuron_deserialize(char *);
 

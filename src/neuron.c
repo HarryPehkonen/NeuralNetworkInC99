@@ -77,14 +77,17 @@ neuron_free(neuron_t *neuron) {
 }
 
 nn_value_t
-neuron_calculate_output(neuron_t *neuron, nn_value_t *inputs, int inputs_len) {
+neuron_run(neuron_t *neuron, nn_value_t *inputs[], int inputs_len) {
 	nn_value_t sum = neuron->bias;
 	for (int i = 0; i < inputs_len; i++) {
-		sum += inputs[i] * neuron->weights[i];
+		sum += *inputs[i] * (neuron->weights[i]);
 	}
-	return activations[neuron->activation_idx](sum);
+
+	activation_function_t activation = activations[neuron->activation_idx];
+	return activation(sum);
 }
 
+// TODO:  serialize/deserialize should be thread safe
 // not multithreaded
 char * serialized_neuron = NULL;
 size_t serialized_neuron_len = 128;

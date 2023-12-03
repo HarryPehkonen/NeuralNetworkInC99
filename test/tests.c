@@ -68,14 +68,14 @@ static int test_neuron_output(void) {
 	}
 	neuron->bias = 0;
 
-	nn_value_t output = neuron_calculate_output(neuron, &input1[0], 1);
+	nn_value_t output = neuron_run(neuron, (nn_value_t **) &input1, 1);
 	// printf("%1.15lf\n", output);
 	if (fabs(output - 0.622459331201855) > NN_EPSILON) {
 		result |= 1;
 	}
 
 	nn_value_t input2[4] = {-0.5, -0.5, -0.5, -0.5};
-	output = neuron_calculate_output(neuron, &input2[0], 1);
+	output = neuron_run(neuron, (nn_value_t **) & input2, 1);
 	// printf("%1.15lf\n", output);
 	if (fabs(output - 0.377540668798145) > NN_EPSILON) {
 		result |= 2;
