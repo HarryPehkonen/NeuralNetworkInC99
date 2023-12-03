@@ -1,6 +1,10 @@
 # vim
 **/*.swp
 
+# visual studio
+.vs/**
+**/.vs/**
+
 # Prerequisites
 *.d
 
