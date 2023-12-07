@@ -13,7 +13,11 @@ TESTDIR = .\test
 
 # Files
 TESTS = $(TESTDIR)\tests.c
-OBJS = $(OBJDIR)\neuron.obj $(OBJDIR)\tests.obj
+OBJS = \
+    $(OBJDIR)\neuron.obj \
+    $(OBJDIR)\layer.obj \
+    $(OBJDIR)\tests.obj \
+    $(OBJDIR)\activation.obj
 
 # Target
 $(BINDIR)\tests.exe: $(OBJS)
@@ -23,8 +27,14 @@ $(BINDIR)\tests.exe: $(OBJS)
 $(OBJDIR)\neuron.obj: $(OBJDIR) $(SRCDIR)\neuron.c $(SRCDIR)\neuron.h
     $(CC) $(CFLAGS) /c $(SRCDIR)\neuron.c /Fo$@
 
-$(OBJDIR)\tests.obj: $(TESTS)
-    $(CC) $(CFLAGS) /c $(TESTS) /Fo$@
+$(OBJDIR)\layer.obj: $(OBJDIR) $(SRCDIR)\layer.c $(SRCDIR)\layer.h
+    $(CC) $(CFLAGS) /c $(SRCDIR)\layer.c /Fo$@
+
+$(OBJDIR)\activation.obj: $(OBJDIR) $(SRCDIR)\activation.c $(SRCDIR)\activation.h
+    $(CC) $(CFLAGS) /c $(SRCDIR)\activation.c /Fo$@
+
+$(OBJDIR)\tests.obj: $(TESTDIR)\tests.c
+    $(CC) $(CFLAGS) /c $(TESTDIR)\tests.c /Fo$@
 
 # Check if the obj directory exists and create it if not
 $(OBJDIR):

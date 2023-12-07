@@ -1,33 +1,29 @@
-#define NN_EPSILON 0.00000001
-
-// length of double when serializing/deserializing
-#define NN_DOUBLE_LEN 17
-#define NN_DELIMITER '\t'
-
-typedef double nn_value_t;
-
-typedef enum {
-	SIGMOID,
-	TANH,
-	RELU,
-	LEAKY_RELU
-} activation_t;
+#ifndef NEURON_H
+#define NEURON_H
 
 typedef struct {
-	unsigned int n_weights;
+	size_t n_inputs;
+	size_t n_populated;
 
-	// it's easier to de/serialize integers than function pointers
-	activation_t activation_idx;
-	nn_value_t *weights;
+	nn_value_t** inputs;
+	nn_value_t* weights;
 	nn_value_t bias;
+	nn_value_t output;
 } neuron_t;
 
-typedef nn_value_t (*activation_function_t)(nn_value_t);
+typedef nn_value_t(*activation_function_t)(nn_value_t);
 
-neuron_t *neuron_make(unsigned int n_weights, activation_t);
-neuron_t *neuron_free(neuron_t *);
-nn_value_t sigmoid(nn_value_t);
-nn_value_t neuron_run(neuron_t *, nn_value_t *inputs[], int inputs_len);
-char *neuron_serialize(neuron_t *);
-neuron_t *neuron_deserialize(char *);
+neuron_t* neuron_make(unsigned int n_inputs);
+neuron_t* neuron_free(neuron_t*);
 
+nn_value_t act_sigmoid(nn_value_t);
+nn_value_t act_tanh(nn_value_t);
+nn_value_t act_relu(nn_value_t);
+nn_value_t act_leaky_relu(nn_value_t);
+
+// int neuron_connect(neuron_t* dest, neuron_t* src);
+void neuron_activate(neuron_t*, activation_function_t act);
+int neuron_serialize(FILE* fp, neuron_t* neuron);
+neuron_t* neuron_deserialize(FILE*);
+
+#endif

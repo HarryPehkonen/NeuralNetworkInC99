@@ -2,199 +2,207 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include "activation.h"
+#include "defs.h"
 #include "neuron.h"
 
 time_t seed = (time_t)0;
 
-// activation functions
-nn_value_t
-act_sigmoid(nn_value_t x) {
-	return (nn_value_t) (1.0 / (1.0 + exp(-x)));
-}
-
-nn_value_t
-act_tanh(nn_value_t x) {
-    return tanh(x);
-}
-
-nn_value_t
-act_relu(nn_value_t x) {
-    return (x > 0) ? x : 0;
-}
-
-nn_value_t
-act_leaky_relu(nn_value_t x) {
-    return (x > 0) ? x : 0.01 * x;
-}
-
-// TODO:  Softmax?
-
 // must be in same order as activation_t enums
 activation_function_t activations[] = {
-	act_sigmoid,
-	act_tanh,
-	act_relu,
-	act_leaky_relu
+    act_sigmoid,
+    act_tanh,
+    act_relu,
+    act_leaky_relu
+    // softmax?
 };
 
-// neuron
-neuron_t *
-neuron_make(unsigned int n_weights, activation_t activation) {
-	neuron_t *neuron = (neuron_t *)malloc(sizeof(neuron));
-	if (neuron != NULL) {
-		neuron->weights = (nn_value_t *)malloc(n_weights * sizeof(nn_value_t));
-	}
-	if ((neuron == NULL) || (neuron->weights == NULL)) {
-		exit(1);
-	}
+// once a neuron is created, it cannot be resized.
+neuron_t*
+neuron_make(unsigned int n_inputs)
+{
+    neuron_t* neuron = (neuron_t*)malloc(sizeof(neuron_t));
+    if (neuron == NULL) {
+        exit(__LINE__);
+    }
+    neuron->inputs = (nn_value_t**)malloc(n_inputs * sizeof(nn_value_t*));
+    if (neuron->inputs == NULL) {
+        free(neuron);
+        exit(__LINE__);
+    }
+    neuron->weights = (nn_value_t*)malloc(n_inputs * sizeof(nn_value_t));
+    if (neuron->weights == NULL) {
+        free(neuron->inputs);
+        free(neuron);
+        exit(__LINE__);
+    }
 
-	neuron->activation_idx = activation;
+    // start with a seed, but only the first time
+    if (seed == 0) {
+        seed = time(NULL);
+        if (seed == (time_t)(-1)) {
+            exit(__LINE__);
+        }
+        srand(seed);
+    }
 
-	// start with a seed, but only the first time
-	if (seed == 0) {
-		seed = time(NULL);
-		if (seed == (time_t)(-1)) {
-			exit(2);
-		}
-		srand(seed);
-	}
+    neuron->n_inputs = n_inputs;
+    for (int i = 0; i < n_inputs; i++) {
 
-	neuron->n_weights = n_weights;
-	for (int i = 0; i < n_weights; i++) {
-		neuron->weights[i] = rand() / (nn_value_t)RAND_MAX;
-	}
-	neuron->bias = rand() / (nn_value_t)RAND_MAX;
+        // initialize inputs to NULL
+        neuron->inputs[i] = NULL;
 
-	return neuron;
+        // initialize weights to random values between 0 and 1
+        neuron->weights[i] = rand() / (nn_value_t)RAND_MAX;
+    }
+    neuron->bias = rand() / (nn_value_t)RAND_MAX;
+
+    return neuron;
 }
 
-neuron_t *
-neuron_free(neuron_t *neuron) {
-	free(neuron->weights);
-	neuron->weights = NULL;
-	free(neuron);
-	return NULL;
+neuron_t*
+neuron_free(neuron_t* neuron)
+{
+
+    if (neuron == NULL) {
+        return NULL;
+    }
+    free(neuron->weights);
+    neuron->weights = NULL;
+
+    free(neuron->inputs);
+    neuron->inputs = NULL;
+
+    free(neuron);
+    return NULL;
 }
 
-nn_value_t
-neuron_run(neuron_t *neuron, nn_value_t *inputs[], int inputs_len) {
-	nn_value_t sum = neuron->bias;
-	for (int i = 0; i < inputs_len; i++) {
-		sum += *inputs[i] * (neuron->weights[i]);
-	}
-
-	activation_function_t activation = activations[neuron->activation_idx];
-	return activation(sum);
+void neuron_activate(neuron_t* neuron, activation_function_t activation_function)
+{
+    nn_value_t weighted_sum = neuron->bias;
+    for (int i = 0; i < neuron->n_populated; i++) {
+        weighted_sum += *neuron->inputs[i] * neuron->weights[i];
+    }
+    neuron->output = activation_function(weighted_sum);
 }
 
-// TODO:  serialize/deserialize should be thread safe
-// not multithreaded
-char * serialized_neuron = NULL;
-size_t serialized_neuron_len = 128;
+int neuron_serialize(FILE* fh, neuron_t* neuron)
+{
 
-char *
-neuron_serialize(neuron_t *neuron) {
+    // result from each write
+    int result = 0;
+    char separator = '#';
 
-	// keep track of how much we have written so we can append to end
-	size_t written = 0;
+    // write the size of the neuron structure first
+    size_t serialized_neuron_len = sizeof(neuron_t);
+    if (fwrite(&serialized_neuron_len, sizeof(serialized_neuron_len), 1, fh) != 1) {
+        return -1;
+    }
 
-	// allocate buffer
-	if (serialized_neuron == NULL) {
-		serialized_neuron = malloc(serialized_neuron_len);
-		if (serialized_neuron == NULL) {
-			exit(3);
-		}
-	}
+    if (fwrite(&separator, sizeof(separator), 1, fh) != 1) {
+        return -1;
+    }
 
-	// write n_weights
-	written += snprintf(
-		&serialized_neuron[written],
-		serialized_neuron_len - written,
-		"%04x%c",
-		neuron->n_weights,
-		NN_DELIMITER
-	);
+    // write the number of inputs
+    if (fwrite(&neuron->n_inputs, sizeof(neuron->n_inputs), 1, fh) != 1) {
+        return -1;
+    }
 
-	// write weights
-	for (int i = 0; i < neuron->n_weights; ++i) {
-		written += snprintf(
-			&serialized_neuron[written],
-			serialized_neuron_len - written,
-			"%1.15lf%c",
-			neuron->weights[i],
-			NN_DELIMITER
-		);
-	}
+    if (fwrite(&separator, sizeof(separator), 1, fh) != 1) {
+        return -1;
+    }
 
-	// write bias
-	written += snprintf(
-		&serialized_neuron[written],
-		serialized_neuron_len - written,
-		"%1.15lf%c",
-		neuron->bias,
-		NN_DELIMITER
-	);
+    // write the neuron structure.  this should copy over any
+    // variables that are not pointers.
+    if (fwrite(neuron, serialized_neuron_len, 1, fh) != 1) {
+        return -1;
+    }
 
-	return serialized_neuron;
+    if (fwrite(&separator, sizeof(separator), 1, fh) != 1) {
+        return -1;
+    }
+
+    // weights
+    if (fwrite(neuron->weights, sizeof(nn_value_t), neuron->n_inputs, fh) != neuron->n_inputs) {
+        return -1;
+    }
+
+    // connections (output of previous neuron to input of this neuron)
+    // are not serialized.  they are set at runtime.
+
+    return 0;
 }
 
-static int
-is_delimiter_correct(char delimiter) {
-	if (delimiter != NN_DELIMITER) {
-		fprintf(stderr, "Expected delimiter, but received %c\n", delimiter);
-		return 1 == 0;
-	}
-	return 1 == 1;
-}
+neuron_t*
+neuron_deserialize(FILE* fp)
+{
+    int result = 0;
+    char separator_expected = '#';
+    char separator_actual = 0;
+    neuron_t* neuron = NULL;
+    neuron_t* dummy = NULL;
 
-neuron_t *
-neuron_deserialize(char *txt) {
-	unsigned int n_weights = 0;
-	size_t read = 0;
-	size_t chars_read = 0;
-	char delimiter;
+    // read the size of the neuron structure first
+    size_t serialized_neuron_len = 0;
+    if (fread(&serialized_neuron_len, sizeof(serialized_neuron_len), 1, fp) != 1) {
+        return NULL;
+    }
 
-	// get the number of weights
-	chars_read = sscanf(&txt[read], "%04x", &n_weights) * 4;
-	read += chars_read;
+    // read the separator
+    if (fread(&separator_actual, sizeof(separator_actual), 1, fp) != 1) {
+        return NULL;
+    }
+    if (separator_actual != separator_expected) {
+        return NULL;
+    }
 
-	// skip over the delimiter
-	// make sure it's correct
-	chars_read = sscanf(&txt[read], "%c", &delimiter) * sizeof(char);
-	if (!is_delimiter_correct(delimiter)) {
-		return NULL;
-	}
-	read += chars_read;
+    // read the number of inputs
+    size_t n_inputs = 0;
+    if (fread(&n_inputs, sizeof(n_inputs), 1, fp) != 1) {
+        return NULL;
+    }
 
-	// make a new neuron, and start adding values
-	neuron_t *neuron = neuron_make(n_weights, SIGMOID);
+    // read the separator
+    if (fread(&separator_actual, sizeof(separator_actual), 1, fp) != 1) {
+        return NULL;
+    }
+    if (separator_actual != separator_expected) {
+        return NULL;
+    }
 
-	// read and populate weights
-	for (int i = 0; i < n_weights; ++i) {
-		nn_value_t weight;
-		chars_read = sscanf(&txt[read], "%lf", &weight) * NN_DOUBLE_LEN;
-		read += chars_read;
+    // Make the neuron structure
+    neuron = neuron_make(n_inputs);
+    if (neuron == NULL) {
+        return NULL;
+    }
 
-		// make sure the delimiter is correct
-		chars_read = sscanf(&txt[read], "%c", &delimiter) * sizeof(char);
-		if (!is_delimiter_correct(delimiter)) {
-			return NULL;
-		}
-		read += chars_read;
-		neuron->weights[i] = weight;
-	}
+    // Read the neuron structure into a dummy structure -- we don't
+    // want to lose pointers without freeing them.
+    dummy = (neuron_t*)malloc(sizeof(neuron_t));
+    if (dummy == NULL) {
+        return NULL;
+    }
+    if (fread(dummy, sizeof(neuron_t), 1, fp) != 1) {
+        return NULL;
+    }
 
-	nn_value_t bias;
-	chars_read = sscanf(&txt[read], "%lf", &bias) * NN_DOUBLE_LEN;
-	read += chars_read;
-	
-	// make sure the delimiter is correct
-	chars_read = sscanf(&txt[read], "%c", &delimiter) * sizeof(char);
-	if (!is_delimiter_correct(delimiter)) {
-		return NULL;
-	}
-	read += chars_read;
-	neuron->bias = bias;
+    // read the separator
+    if (fread(&separator_actual, sizeof(separator_actual), 1, fp) != 1) {
+        return NULL;
+    }
 
-	return neuron;
+    // copy the dummy structure into the real structure
+    neuron->bias = dummy->bias;
+
+    // done with the dummy structure
+    free(dummy);
+    dummy = NULL;
+
+    // weights
+    size_t readcount = fread(neuron->weights, sizeof(nn_value_t), n_inputs, fp);
+    if (readcount != n_inputs) {
+        return NULL;
+    }
+
+    return neuron;
 }
